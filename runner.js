@@ -5,6 +5,9 @@ const { PDFDocument, PDFName, PDFHexString, PDFNull } = PDFLib;
 const $ = id => document.getElementById(id);
 
 const PAPER = { letter: [8.5, 11], a4: [8.27, 11.69] };
+const MAX_PARALLEL = 16;
+let workerWindowId = null;      // minimized window the background tabs open in
+let pump = null;                // nudges the pool when "pages at once" changes
 const LOAD_TIMEOUT = 45000;
 
 let job, settings, keep;
@@ -217,7 +220,7 @@ async function processNode(node) {
 
   let tab;
   try {
-    tab = await chrome.tabs.create({ url: node.url, active: false });
+    tab = await openWorkerTab(node.url);
     openTabs.add(tab.id);
     await waitForTabLoad(tab.id);
     if (cancelled) return;
@@ -253,12 +256,48 @@ async function processNode(node) {
   }
 }
 
-async function runPool(items, size, fn) {
-  let i = 0;
-  const worker = async () => {
-    while (i < items.length && !stopRequested && !cancelled) await fn(items[i++]);
-  };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(size, items.length)) }, worker));
+// Keeps `settings.parallel` pages going at once; changing it mid-run takes effect right away.
+function runPool(items, fn) {
+  return new Promise(resolve => {
+    let i = 0, running = 0;
+    pump = () => {
+      while (running < settings.parallel && i < items.length && !stopRequested && !cancelled) {
+        running++;
+        fn(items[i++]).catch(() => {}).finally(() => { running--; pump(); });
+      }
+      if (running === 0 && (i >= items.length || stopRequested || cancelled)) resolve();
+    };
+    pump();
+  });
+}
+
+// Background pages open in their own minimized window so they don't crowd your tab bar.
+async function openWorkerTab(url) {
+  if (workerWindowId !== null) {
+    try { return await chrome.tabs.create({ windowId: workerWindowId, url, active: false }); }
+    catch { workerWindowId = null; } // you closed that window; make a new one
+  }
+  try {
+    const w = await chrome.windows.create({ url: "about:blank", focused: false, state: "minimized" });
+    workerWindowId = w.id;
+    return await chrome.tabs.create({ windowId: workerWindowId, url, active: false });
+  } catch {
+    return await chrome.tabs.create({ url, active: false }); // fall back to this window
+  }
+}
+async function closeWorkerWindow() {
+  if (workerWindowId === null) return;
+  const id = workerWindowId; workerWindowId = null;
+  await chrome.windows.remove(id).catch(() => {});
+}
+
+function showParallel() { $("nParallel").textContent = settings.parallel; }
+function setParallel(n) {
+  settings.parallel = Math.max(1, Math.min(MAX_PARALLEL, n));
+  showParallel();
+  chrome.storage.local.get("settings").then(({ settings: s }) =>
+    chrome.storage.local.set({ settings: { ...(s || {}), parallel: settings.parallel, speedV2: true } }));
+  if (pump) pump();
 }
 
 function makeNode(url, depth, parent) {
@@ -367,6 +406,8 @@ async function main() {
   ({ job } = await chrome.storage.local.get("job"));
   if (!job) { setStatus("No job found. Start one from the extension's toolbar button."); return; }
   settings = { ...DEFAULT_SETTINGS, ...job.settings };
+  settings.parallel = Math.max(1, Math.min(MAX_PARALLEL, Number(settings.parallel) || DEFAULT_SETTINGS.parallel));
+  showParallel();
   const startUrl = normalizeUrl(job.startUrl);
   const recipe = job.mode === "recipe";
   const maxDepth = recipe ? job.recipe.levels.length : settings.depth;
@@ -388,7 +429,7 @@ async function main() {
     currentLevel = d;
     setStatus(d === 0 ? "Reading the start page…" : `Level ${d}: capturing ${level.length} pages…`);
     refreshStats();
-    await runPool(level, settings.parallel, processNode);
+    await runPool(level, processNode);
     if (d >= maxDepth || stopRequested || cancelled) break;
 
     // Queue new links found on this level, in page order, skipping anything already seen.
@@ -408,6 +449,7 @@ async function main() {
   }
 
   // Anything still queued (after a stop) is marked skipped.
+  await closeWorkerWindow();
   for (const n of nodes) if (n.status === "queued") { n.status = "skipped"; updateRow(n, "⏭️", "skipped"); }
   $("stop").disabled = true; $("cancel").disabled = true;
   if (cancelled) { setStatus("Cancelled. Nothing was saved."); return; }
@@ -415,6 +457,8 @@ async function main() {
   if (capped) $("status").textContent += ` Stopped at the ${settings.maxPages}-page limit (raise "Max pages" to get more).`;
 }
 
+$("slower").addEventListener("click", () => setParallel(settings.parallel - 1));
+$("faster").addEventListener("click", () => setParallel(settings.parallel + 1));
 $("stop").addEventListener("click", () => {
   stopRequested = true;
   $("stop").disabled = true;
@@ -424,6 +468,7 @@ $("cancel").addEventListener("click", async () => {
   cancelled = stopRequested = true;
   $("stop").disabled = true; $("cancel").disabled = true;
   for (const id of openTabs) chrome.tabs.remove(id).catch(() => {});
+  closeWorkerWindow();
   setStatus("Cancelled. Nothing was saved.");
 });
 window.addEventListener("beforeunload", e => {

@@ -18,6 +18,8 @@
   .bar > div { height:100%; width:0; background:var(--red); transition:width .3s; }
   .stats { display:flex; gap:18px; flex-wrap:wrap; margin-top:10px; color:var(--muted); font-size:13px; }
   .stats b { color:var(--ink); }
+  .speed { display:inline-flex; align-items:center; gap:6px; }
+  .speed button { padding:0 8px; height:22px; line-height:20px; border-radius:6px; font-size:14px; }
   .actions { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
   button, a.btn { padding:9px 14px; border-radius:8px; border:1px solid var(--line); background:#fff; font:inherit; font-weight:600; cursor:pointer; color:var(--ink); text-decoration:none; }
   button.primary, a.btn.primary { background:var(--red); border-color:var(--red); color:#fff; }
@@ -49,6 +51,10 @@
       <span>Failed <b id="nFailed">0</b></span>
       <span>Level <b id="nLevel">0</b></span>
       <span>Time <b id="elapsed">0:00</b></span>
+      <span class="speed">Pages at once
+        <button id="slower" title="Fewer at once (easier on your computer)">−</button>
+        <b id="nParallel">8</b>
+        <button id="faster" title="More at once (faster)">+</button></span>
     </div>
     <div class="actions">
       <button id="stop">Stop &amp; save what I have</button>

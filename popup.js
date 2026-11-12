@@ -10,6 +10,8 @@ function readForm() {
     s[f] = el.type === "number" || f === "depth" ? Number(el.value) : el.value;
   }
   for (const c of CHECKS) s[c] = $(c).checked;
+  s.parallel = Math.max(1, Math.min(16, s.parallel || 8));
+  s.speedV2 = true;
   return s;
 }
 

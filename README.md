@@ -42,7 +42,7 @@ Under "Automatic mode" in the popup: grab every link on the page, 1–3 levels d
 - Keep the progress tab open until it finishes. **Stop & save what I have** merges whatever is done so far.
 - Chrome shows a "started debugging this browser" bar while a job runs. That's how pages get printed to PDF, and it goes away when the job ends.
 - The same page is never captured twice, and `#anchor` links count as the same page.
-- PDF options (paper size, page order, URL footer, pages at once, max pages) are under **PDF options** in the popup.
+- PDF options (paper size, page order, URL footer, pages at once (up to 16, default 8), max pages) are under **PDF options** in the popup.
 - Pages behind a login work as long as you're logged in in Chrome.
 - Links that point straight at PDF files (FAA handbooks, charts) are added as-is, and "locked" PDFs get unlocked first. Turn this off with **Include links that are PDF files** under PDF options. A PDF that needs a real password is skipped and marked in the progress list.
 - To find where a page in the big PDF came from, open the bookmarks (☰ in Chrome's PDF viewer). Every source page is bookmarked by name.

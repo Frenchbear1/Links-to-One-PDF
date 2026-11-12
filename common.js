@@ -6,7 +6,7 @@ const DEFAULT_SETTINGS = {
   include: "",         // comma-separated: only keep URLs containing any of these
   exclude: "",         // comma-separated: drop URLs containing any of these
   maxPages: 300,
-  parallel: 2,
+  parallel: 8,         // pages loading at the same time (1-16)
   waitMs: 1500,
   includeStart: true,
   footer: true,
@@ -65,5 +65,9 @@ function makeFilter(startUrl, settings) {
 
 async function loadSettings() {
   const { settings } = await chrome.storage.local.get("settings");
-  return { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  const s = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  // Older versions saved 2 as the default; bump those to the new faster default once.
+  if (settings && !settings.speedV2) { if (s.parallel <= 2) s.parallel = DEFAULT_SETTINGS.parallel; s.speedV2 = true; }
+  s.parallel = Math.max(1, Math.min(16, Number(s.parallel) || DEFAULT_SETTINGS.parallel));
+  return s;
 }
