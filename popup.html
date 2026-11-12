@@ -74,7 +74,6 @@
     <label>Skip links containing <small>(comma-separated)</small>
       <input type="text" id="exclude" placeholder="e.g. login, cart, /tag/">
     </label>
-    <label class="check"><input type="checkbox" id="linkedPdfs"> Also merge links that are already PDF files</label>
     <div class="preview" id="preview">Checking this page…</div>
     <div class="buttons">
       <button id="rescan">Re-check</button>
@@ -102,6 +101,7 @@
     </label>
     <label class="check"><input type="checkbox" id="includeStart"> Include the start page itself</label>
     <label class="check"><input type="checkbox" id="footer"> Print the source URL + page number at the bottom</label>
+    <label class="check"><input type="checkbox" id="linkedPdfs"> Include links that are PDF files (handbooks etc. can add hundreds of pages)</label>
   </details>
 </main>
 <script src="common.js"></script>

@@ -117,6 +117,22 @@ function b64ToBytes(b64) {
   return out;
 }
 
+// Open a PDF file. Many PDFs (FAA handbooks, etc.) are "locked" against editing but open without
+// a password; those get unlocked here. Merging them without unlocking turns their pages into
+// blank or rainbow-static garbage.
+async function openPdf(bytes) {
+  const probe = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+  if (!probe.isEncrypted) return probe;
+  let doc;
+  try {
+    doc = await PDFDocument.load(bytes, { password: "", updateMetadata: false });
+  } catch {
+    throw new Error("this PDF needs a password, so it was left out");
+  }
+  doc.unlocked = true;
+  return doc;
+}
+
 async function printTab(tabId) {
   const target = { tabId };
   await chrome.debugger.attach(target, "1.3");
@@ -183,12 +199,14 @@ async function processNode(node) {
     try {
       const r = await fetch(node.url, { credentials: "include" });
       if (!r.ok) throw new Error("HTTP " + r.status);
-      node.pdf = new Uint8Array(await r.arrayBuffer());
-      await PDFDocument.load(node.pdf, { ignoreEncryption: true }); // make sure it's a real PDF
-      node.title = decodeURIComponent(new URL(node.url).pathname.split("/").pop());
+      const bytes = new Uint8Array(await r.arrayBuffer());
+      const doc = await openPdf(bytes);
+      // Locked PDFs were unlocked by openPdf; save an unlocked copy so the merge reads it correctly.
+      node.pdf = doc.unlocked ? await doc.save() : bytes;
+      node.title = doc.getTitle() || decodeURIComponent(new URL(node.url).pathname.split("/").pop());
       node.links = [];
       node.status = "done"; doneCount++;
-      updateRow(node, "✅", "PDF file");
+      updateRow(node, "✅", `PDF file · ${doc.getPageCount()} pages${doc.unlocked ? " (unlocked)" : ""}`);
     } catch (e) {
       node.status = "failed"; failCount++;
       updateRow(node, "⚠️", "failed: " + (e.message || e));
@@ -308,7 +326,7 @@ async function mergeAndSave(root) {
     k++;
     setStatus(`Merging ${k} of ${flat.length}…`);
     try {
-      const src = await PDFDocument.load(e.node.pdf, { ignoreEncryption: true });
+      const src = await openPdf(e.node.pdf);
       const pages = await out.copyPages(src, src.getPageIndices());
       pages.forEach(p => out.addPage(p));
       e.pageRef = pages[0]?.ref;
@@ -357,7 +375,9 @@ async function main() {
       job.recipe.levels.map((l, i) => `L${i + 1} ${{ download: "download", follow: "more links", both: "download + more links" }[l.role]}`).join(" → ")
     : `${job.startUrl}  ·  depth ${settings.depth}  ·  ${{ site: "same website", folder: "same folder", any: "any website" }[settings.scope]}`;
   // Picked links are used as-is (you chose them); automatic mode applies the scope filters.
-  keep = recipe ? (u => !SKIP_EXT.test(new URL(u).pathname)) : makeFilter(startUrl, settings);
+  keep = recipe
+    ? (u => !SKIP_EXT.test(new URL(u).pathname) && (settings.linkedPdfs || !isPdfUrl(u)))
+    : makeFilter(startUrl, settings);
 
   seen.add(startUrl);
   const root = makeNode(startUrl, 0, null);
