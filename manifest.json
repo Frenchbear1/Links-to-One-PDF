@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Links to One PDF",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Pick the links you want on a page (as many levels deep as you like), and it saves every page as a PDF and merges them into one.",
   "action": {
     "default_popup": "popup.html",

@@ -136,6 +136,47 @@ async function openPdf(bytes) {
   return doc;
 }
 
+// Read every page the way PDF readers like pdf.js (and Instant Search) do, and report pages
+// that fail. Chrome's own viewer quietly skips damaged parts, so they're easy to miss there.
+let pdfjsPromise = null;
+function loadPdfjs() {
+  if (!pdfjsPromise) {
+    pdfjsPromise = import(chrome.runtime.getURL("lib/pdf.min.mjs")).then(m => {
+      m.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL("lib/pdf.worker.min.mjs");
+      return m;
+    });
+  }
+  return pdfjsPromise;
+}
+async function findDamagedPages(bytes) {
+  const pdfjs = await loadPdfjs();
+  const doc = await pdfjs.getDocument({ data: bytes.slice(0), isEvalSupported: false, stopAtErrors: true, verbosity: 0 }).promise;
+  const bad = [];
+  try {
+    for (let i = 1; i <= doc.numPages; i++) {
+      try {
+        const page = await doc.getPage(i);
+        await page.getTextContent();
+        await page.getOperatorList();   // also decodes the page's pictures
+        page.cleanup();
+      } catch {
+        bad.push(i - 1);
+      }
+    }
+  } finally {
+    doc.destroy();
+  }
+  return bad;
+}
+
+// Copy of a PDF without the given pages (0-based).
+async function withoutPages(doc, bad) {
+  const out = await PDFDocument.create();
+  const keep = doc.getPageIndices().filter(i => !bad.includes(i));
+  (await out.copyPages(doc, keep)).forEach(p => out.addPage(p));
+  return out.save();
+}
+
 async function printTab(tabId) {
   const target = { tabId };
   await chrome.debugger.attach(target, "1.3");
@@ -205,11 +246,19 @@ async function processNode(node) {
       const bytes = new Uint8Array(await r.arrayBuffer());
       const doc = await openPdf(bytes);
       // Locked PDFs were unlocked by openPdf; save an unlocked copy so the merge reads it correctly.
-      node.pdf = doc.unlocked ? await doc.save() : bytes;
+      let clean = doc.unlocked ? await doc.save() : bytes;
+      const total = doc.getPageCount();
+      updateRow(node, "🔎", `checking ${total} pages`);
+      let bad = [];
+      try { bad = await findDamagedPages(clean); } catch { bad = doc.getPageIndices(); }
+      if (bad.length >= total) throw new Error("this PDF is damaged and can't be read, so it was left out");
+      if (bad.length) clean = await withoutPages(await openPdf(clean), bad);
+      node.pdf = clean;
       node.title = doc.getTitle() || decodeURIComponent(new URL(node.url).pathname.split("/").pop());
       node.links = [];
       node.status = "done"; doneCount++;
-      updateRow(node, "✅", `PDF file · ${doc.getPageCount()} pages${doc.unlocked ? " (unlocked)" : ""}`);
+      const notes = [doc.unlocked && "unlocked", bad.length && `${bad.length} damaged page${bad.length === 1 ? "" : "s"} left out`].filter(Boolean);
+      updateRow(node, "✅", `PDF file · ${total - bad.length} page${total - bad.length === 1 ? "" : "s"}${notes.length ? " (" + notes.join(", ") + ")" : ""}`);
     } catch (e) {
       node.status = "failed"; failCount++;
       updateRow(node, "⚠️", "failed: " + (e.message || e));
