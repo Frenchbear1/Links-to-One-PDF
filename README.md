@@ -1,29 +1,45 @@
-LINKS TO ONE PDF - Chrome extension
+# Links to One PDF
 
-INSTALL
-1. Unzip this folder somewhere permanent (e.g. Documents\link-to-pdf). Don't delete it later - Chrome runs it from there.
-2. In Chrome, go to chrome://extensions
-3. Turn on "Developer mode" (top-right switch).
-4. Click "Load unpacked" and pick the unzipped link-to-pdf folder (the one with manifest.json in it).
-5. Click the puzzle-piece icon in the toolbar and pin "Links to One PDF".
+Chrome extension that opens the links you choose in background tabs, saves each page as a PDF, and merges them all into one big PDF with clickable bookmarks.
 
-USE
-1. Open the page you want to start from.
-2. Click the extension icon. It shows how many links it found.
-3. Pick a depth:
-     1 = every link on this page
-     2 = every link on this page + every link inside those pages
-     3 = one more level
-4. Click "Make one PDF". A progress tab opens; pages open in background tabs, get saved as PDF and close.
-5. When it's done, the merged PDF goes to your Downloads folder. It has clickable bookmarks for every page.
+## Install
 
-FOR CFI NOTEBOOK
-Start page: https://www.cfinotebook.net/notebook/cfi-notebook
-Depth: 2   Which links: Same website   Only links containing: /notebook/
-Under "More options", raise Max pages to 1000 if you want the whole notebook.
+1. Download this repo (green **Code** button → **Download ZIP**) and unzip it somewhere permanent. Chrome runs it from that folder, so don't delete it.
+2. In Chrome, go to `chrome://extensions`
+3. Turn on **Developer mode** (top-right switch).
+4. Click **Load unpacked** and pick the folder that has `manifest.json` in it.
+5. Click the puzzle-piece icon in the toolbar and pin **Links to One PDF**.
 
-NOTES
-- Keep the progress tab open until it finishes. "Stop & save what I have" merges whatever is done so far.
-- Chrome shows a "started debugging this browser" bar during the job. That's how it prints pages to PDF; it goes away afterward.
-- The same page is never captured twice, and #anchor links count as the same page.
-- Pages that need a login work as long as you're logged in in Chrome.
+After pulling an update, click the ↻ reload icon on the extension's card in `chrome://extensions`.
+
+## Pick the links yourself (main way)
+
+1. Open the start page and click the extension icon → **Start picking on this page**. A panel appears on the page.
+2. **Level 1:** click a link. With "Also select similar items" on, the whole list or row it belongs to gets selected (blue boxes). Use **−** / **+** on the selection to make it narrower or wider. Click a selected link again to unselect it. You can make several selections on one level.
+   - You can also click a whole box (for example a sidebar) to take every link inside it.
+   - Hold **Alt** while clicking, or switch to **Use page normally**, to click the page itself. Use that to open a tab on the page before picking the links inside it.
+3. Tell it what those pages are:
+   - **Pages to download** – this is the last level.
+   - **Pages with more links** – click **Pick next level →**. It opens one of those pages as a sample so you can pick level 2 there. Use ◀ ▶ to look at other sample pages.
+   - **Both** – download them *and* pick links inside them.
+4. Repeat for as many levels as you need, then press **Make PDF**.
+
+Your picks get applied to every page at that level, not just the sample. They're saved, so the popup's **Edit picks** / **Make PDF** buttons let you change or rerun them later.
+
+### Example: CFI Notebook
+
+- Level 1 (start page): click a link in the Flight Training tab → *Pages with more links*
+- Level 2 (a chapter page): click a link in the right-hand list → *Pages with more links*
+- Level 3: click an article link → *Pages to download* → **Make PDF**
+
+## Automatic mode
+
+Under "Automatic mode" in the popup: grab every link on the page, 1–3 levels deep, filtered to the same website/folder and optional text filters.
+
+## Notes
+
+- Keep the progress tab open until it finishes. **Stop & save what I have** merges whatever is done so far.
+- Chrome shows a "started debugging this browser" bar while a job runs. That's how pages get printed to PDF, and it goes away when the job ends.
+- The same page is never captured twice, and `#anchor` links count as the same page.
+- PDF options (paper size, page order, URL footer, pages at once, max pages) are under **PDF options** in the popup.
+- Pages behind a login work as long as you're logged in in Chrome.

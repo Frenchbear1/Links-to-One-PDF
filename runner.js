@@ -68,7 +68,8 @@ function waitForTabLoad(tabId) {
 }
 
 // Runs inside the captured page: make lazy images load, wait a moment, return title + links.
-async function probePage(waitMs) {
+// selectors: "all" = every link on the page, an array = only links inside elements you picked, null = none.
+async function probePage(waitMs, selectors) {
   for (const img of document.images) {
     if (img.loading === "lazy") img.loading = "eager";
     const ds = img.dataset.src || img.dataset.lazySrc || img.dataset.original;
@@ -80,10 +81,21 @@ async function probePage(waitMs) {
     Promise.all(pending.map(i => new Promise(r => { i.addEventListener("load", r); i.addEventListener("error", r); }))),
     new Promise(r => setTimeout(r, 6000))
   ]);
-  return {
-    title: document.title || location.href,
-    links: [...document.querySelectorAll("a[href]")].map(a => a.href)
-  };
+  let links = [];
+  if (selectors === "all") {
+    links = [...document.querySelectorAll("a[href]")].map(a => a.href);
+  } else if (Array.isArray(selectors)) {
+    for (const sel of selectors) {
+      let els = [];
+      try { els = [...document.querySelectorAll(sel)]; } catch {}
+      for (const el of els) {
+        const a = el.closest("a[href]");
+        if (a) links.push(a.href);
+        else for (const x of el.querySelectorAll("a[href]")) links.push(x.href);
+      }
+    }
+  }
+  return { title: document.title || location.href, links };
 }
 
 function b64ToBytes(b64) {
@@ -121,10 +133,23 @@ async function printTab(tabId) {
 }
 
 // ---------- capture one page ----------
+// What to do with a page: save it as PDF? read which links from it?
+function planFor(node) {
+  if (job.mode === "recipe") {
+    const L = job.recipe.levels;
+    if (node.depth === 0) return { pdf: settings.includeStart, selectors: L[0] ? L[0].selectors : null };
+    const lv = L[node.depth - 1], next = L[node.depth];
+    const follow = lv.role !== "download" && next;
+    return { pdf: lv.role !== "follow" || !next, selectors: follow ? next.selectors : null };
+  }
+  return { pdf: node.depth > 0 || settings.includeStart, selectors: node.depth < settings.depth ? "all" : null };
+}
+
 async function processNode(node) {
   if (cancelled) return;
-  const needLinks = node.depth < settings.depth;
-  const needPdf = node.depth > 0 || settings.includeStart;
+  const plan = planFor(node);
+  const needLinks = !!plan.selectors;
+  const needPdf = plan.pdf;
   node.status = "loading";
   updateRow(node, "🔄", "loading");
 
@@ -157,7 +182,7 @@ async function processNode(node) {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: probePage,
-      args: [settings.waitMs]
+      args: [settings.waitMs, plan.selectors]
     });
     node.title = (result.title || node.url).trim();
     node.links = needLinks ? result.links : [];
@@ -300,8 +325,14 @@ async function main() {
   if (!job) { setStatus("No job found. Start one from the extension's toolbar button."); return; }
   settings = { ...DEFAULT_SETTINGS, ...job.settings };
   const startUrl = normalizeUrl(job.startUrl);
-  $("start").textContent = `${job.startUrl}  ·  depth ${settings.depth}  ·  ${{ site: "same website", folder: "same folder", any: "any website" }[settings.scope]}`;
-  keep = makeFilter(startUrl, settings);
+  const recipe = job.mode === "recipe";
+  const maxDepth = recipe ? job.recipe.levels.length : settings.depth;
+  $("start").textContent = recipe
+    ? `${job.startUrl}  ·  ${maxDepth} picked level${maxDepth === 1 ? "" : "s"}: ` +
+      job.recipe.levels.map((l, i) => `L${i + 1} ${{ download: "download", follow: "more links", both: "download + more links" }[l.role]}`).join(" → ")
+    : `${job.startUrl}  ·  depth ${settings.depth}  ·  ${{ site: "same website", folder: "same folder", any: "any website" }[settings.scope]}`;
+  // Picked links are used as-is (you chose them); automatic mode applies the scope filters.
+  keep = recipe ? (u => !SKIP_EXT.test(new URL(u).pathname)) : makeFilter(startUrl, settings);
 
   seen.add(startUrl);
   const root = makeNode(startUrl, 0, null);
@@ -313,7 +344,7 @@ async function main() {
     setStatus(d === 0 ? "Reading the start page…" : `Level ${d}: capturing ${level.length} pages…`);
     refreshStats();
     await runPool(level, settings.parallel, processNode);
-    if (d >= settings.depth || stopRequested || cancelled) break;
+    if (d >= maxDepth || stopRequested || cancelled) break;
 
     // Queue new links found on this level, in page order, skipping anything already seen.
     const next = [];

@@ -18,9 +18,13 @@
   details { border:1px solid var(--line); border-radius:8px; padding:6px 10px; background:var(--bg); }
   details summary { cursor:pointer; font-weight:600; font-size:12px; }
   details[open] { display:grid; gap:10px; padding-bottom:10px; }
-  .preview { font-size:12px; color:var(--muted); background:var(--bg); border-radius:8px; padding:8px 10px; min-height:20px; max-height:120px; overflow:auto; word-break:break-all; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:10px; display:grid; gap:8px; }
+  .card h2 { margin:0; font-size:13px; }
+  .muted { color:var(--muted); font-size:12px; }
+  .preview { font-size:12px; color:var(--muted); background:#fff; border-radius:8px; padding:8px 10px; min-height:20px; max-height:120px; overflow:auto; word-break:break-all; border:1px solid var(--line); }
   .preview b { color:var(--ink); }
   .buttons { display:grid; grid-template-columns:1fr 2fr; gap:8px; }
+  .buttons.three { grid-template-columns:1fr 1fr 1fr; }
   button { padding:9px; border-radius:8px; border:1px solid var(--line); background:#fff; font:inherit; font-weight:600; cursor:pointer; }
   button.primary { background:var(--red); border-color:var(--red); color:#fff; }
   button:disabled { opacity:.5; cursor:default; }
@@ -29,36 +33,57 @@
 <body>
 <header><img src="icons/icon48.png" alt=""><h1>Links to One PDF</h1></header>
 <main>
-  <label>Start page
-    <input type="text" id="startUrl">
-  </label>
-
-  <div class="row">
-    <label>How deep
-      <select id="depth">
-        <option value="1">1 – links on this page</option>
-        <option value="2">2 – + links inside those</option>
-        <option value="3">3 – one level more</option>
-      </select>
-    </label>
-    <label>Which links
-      <select id="scope">
-        <option value="site">Same website</option>
-        <option value="folder">Same folder only</option>
-        <option value="any">Any website</option>
-      </select>
-    </label>
+  <div class="card">
+    <h2>Pick the links yourself</h2>
+    <div class="muted">Click the links (or boxes of links) you want on this page. Then choose whether they're pages to download or pages with more links, and keep going as many levels deep as you need.</div>
+    <button id="pick" class="primary">Start picking on this page</button>
+    <div id="saved" hidden>
+      <div class="muted" id="savedText"></div>
+      <div class="buttons three" style="margin-top:6px">
+        <button id="resume">Edit picks</button>
+        <button id="runSaved">Make PDF</button>
+        <button id="clear">Clear</button>
+      </div>
+    </div>
   </div>
 
-  <label>Only links containing <small>(optional, comma-separated)</small>
-    <input type="text" id="include" placeholder="e.g. /notebook/">
-  </label>
-
-  <details>
-    <summary>More options</summary>
+  <details id="autoBox">
+    <summary>Automatic mode (grab every link)</summary>
+    <label>Start page
+      <input type="text" id="startUrl">
+    </label>
+    <div class="row">
+      <label>How deep
+        <select id="depth">
+          <option value="1">1 – links on this page</option>
+          <option value="2">2 – + links inside those</option>
+          <option value="3">3 – one level more</option>
+        </select>
+      </label>
+      <label>Which links
+        <select id="scope">
+          <option value="site">Same website</option>
+          <option value="folder">Same folder only</option>
+          <option value="any">Any website</option>
+        </select>
+      </label>
+    </div>
+    <label>Only links containing <small>(optional, comma-separated)</small>
+      <input type="text" id="include" placeholder="e.g. /notebook/">
+    </label>
     <label>Skip links containing <small>(comma-separated)</small>
       <input type="text" id="exclude" placeholder="e.g. login, cart, /tag/">
     </label>
+    <label class="check"><input type="checkbox" id="linkedPdfs"> Also merge links that are already PDF files</label>
+    <div class="preview" id="preview">Checking this page…</div>
+    <div class="buttons">
+      <button id="rescan">Re-check</button>
+      <button id="start" class="primary">Make one PDF</button>
+    </div>
+  </details>
+
+  <details>
+    <summary>PDF options</summary>
     <div class="row">
       <label>Max pages<input type="number" id="maxPages" min="1" max="5000"></label>
       <label>Tabs at once<input type="number" id="parallel" min="1" max="6"></label>
@@ -77,15 +102,7 @@
     </label>
     <label class="check"><input type="checkbox" id="includeStart"> Include the start page itself</label>
     <label class="check"><input type="checkbox" id="footer"> Print the source URL + page number at the bottom</label>
-    <label class="check"><input type="checkbox" id="linkedPdfs"> Also merge links that are already PDF files</label>
   </details>
-
-  <div class="preview" id="preview">Checking this page…</div>
-
-  <div class="buttons">
-    <button id="rescan">Re-check</button>
-    <button id="start" class="primary">Make one PDF</button>
-  </div>
 </main>
 <script src="common.js"></script>
 <script src="popup.js"></script>
