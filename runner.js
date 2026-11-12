@@ -85,13 +85,25 @@ async function probePage(waitMs, selectors) {
   if (selectors === "all") {
     links = [...document.querySelectorAll("a[href]")].map(a => a.href);
   } else if (Array.isArray(selectors)) {
-    for (const sel of selectors) {
+    const grab = sel => {
       let els = [];
       try { els = [...document.querySelectorAll(sel)]; } catch {}
       for (const el of els) {
         const a = el.closest("a[href]");
         if (a) links.push(a.href);
         else for (const x of el.querySelectorAll("a[href]")) links.push(x.href);
+      }
+    };
+    for (const g of selectors) {
+      const sel = typeof g === "string" ? g : g.sel;
+      let tabs = [];
+      if (g.tabSel) { try { tabs = [...document.querySelectorAll(g.tabSel)]; } catch {} }
+      if (!tabs.length) { grab(sel); continue; }
+      // Click each tab on the page and read the same spot every time.
+      for (const t of tabs) {
+        try { t.click(); } catch {}
+        await new Promise(r => setTimeout(r, 1000));
+        grab(sel);
       }
     }
   }
@@ -137,10 +149,12 @@ async function printTab(tabId) {
 function planFor(node) {
   if (job.mode === "recipe") {
     const L = job.recipe.levels;
-    if (node.depth === 0) return { pdf: settings.includeStart, selectors: L[0] ? L[0].selectors : null };
+    const sels = lv => lv.groups || lv.selectors; // (older saved picks used "selectors")
+    // The start page: use exactly the pages you picked there.
+    if (node.depth === 0) return { pdf: settings.includeStart, selectors: null, preset: L[0] ? (L[0].urls || null) : null, fallback: L[0] && sels(L[0]) };
     const lv = L[node.depth - 1], next = L[node.depth];
     const follow = lv.role !== "download" && next;
-    return { pdf: lv.role !== "follow" || !next, selectors: follow ? next.selectors : null };
+    return { pdf: lv.role !== "follow" || !next, selectors: follow ? sels(next) : null };
   }
   return { pdf: node.depth > 0 || settings.includeStart, selectors: node.depth < settings.depth ? "all" : null };
 }
@@ -148,8 +162,19 @@ function planFor(node) {
 async function processNode(node) {
   if (cancelled) return;
   const plan = planFor(node);
+  if (plan.preset === null && plan.fallback) plan.selectors = plan.fallback;
   const needLinks = !!plan.selectors;
   const needPdf = plan.pdf;
+
+  // Start page that isn't going in the PDF: no need to even open it.
+  if (plan.preset && !needPdf) {
+    node.links = plan.preset;
+    node.title = "Start page";
+    node.status = "done"; readOnlyCount++;
+    updateRow(node, "✅", "your picked pages");
+    refreshStats();
+    return;
+  }
   node.status = "loading";
   updateRow(node, "🔄", "loading");
 
@@ -185,7 +210,7 @@ async function processNode(node) {
       args: [settings.waitMs, plan.selectors]
     });
     node.title = (result.title || node.url).trim();
-    node.links = needLinks ? result.links : [];
+    node.links = plan.preset || (needLinks ? result.links : []);
 
     // If the page redirected somewhere else, remember that address too so it isn't captured twice.
     const finalUrl = normalizeUrl((await chrome.tabs.get(tab.id)).url);

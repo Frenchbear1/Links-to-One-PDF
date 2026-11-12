@@ -14,23 +14,24 @@ After pulling an update, click the ↻ reload icon on the extension's card in `c
 
 ## Pick the links yourself (main way)
 
-1. Open the start page and click the extension icon → **Start picking on this page**. A panel appears on the page.
-2. **Level 1:** click a link. With "Also select similar items" on, the whole list or row it belongs to gets selected (blue boxes). Use **−** / **+** on the selection to make it narrower or wider. Click a selected link again to unselect it. You can make several selections on one level.
-   - You can also click a whole box (for example a sidebar) to take every link inside it.
-   - Hold **Alt** while clicking, or switch to **Use page normally**, to click the page itself. Use that to open a tab on the page before picking the links inside it.
-3. Tell it what those pages are:
-   - **Pages to download** – this is the last level.
-   - **Pages with more links** – click **Pick next level →**. It opens one of those pages as a sample so you can pick level 2 there. Use ◀ ▶ to look at other sample pages.
-   - **Both** – download them *and* pick links inside them.
-4. Repeat for as many levels as you need, then press **Make PDF**.
+1. Open the start page, click the extension icon, then **Start picking on this page**. A panel shows up on the page.
+2. **Step 1:** move your mouse over a link. An orange outline shows what you'll get ("Click to add 12 pages"). Click it and those pages turn green. They're added to your list in the panel.
+   - Click a green link again to remove it. Use **Fewer** / **More** if it grabbed too little or too much.
+   - Untick "Pick the whole list when I click one link" to pick links one at a time.
+3. **Tabs on the page:** hold **Alt** (Option on a Mac) and click a tab to open it. You can also switch the panel to **Clicking works normally**. Your earlier picks stay in your list, and the new tab starts with nothing highlighted. If it looks like the same kind of list, the panel asks **"Want the same list from all 7 tabs?"**. Say yes and it clicks through every tab for you. Or just pick from each tab yourself, since picks keep adding up.
+4. Answer **"What should I do with these pages?"**
+   - **Put them in the PDF**: you're done, press **Make my PDF**.
+   - **Open them, they have more links to pick**: press **Next**. It opens one of those pages as an example (◀ ▶ shows others). Pick the links there and they get picked on every one of those pages, including "every tab" if you said yes.
+   - **Both**: puts them in the PDF and lets you pick links inside them.
+5. Keep going for as many steps as you need, then press **Make my PDF**.
 
-Your picks get applied to every page at that level, not just the sample. They're saved, so the popup's **Edit picks** / **Make PDF** buttons let you change or rerun them later.
+Your picks are saved, so the popup's **Edit picks** / **Make PDF** buttons let you change or rerun them later.
 
 ### Example: CFI Notebook
 
-- Level 1 (start page): click a link in the Flight Training tab → *Pages with more links*
-- Level 2 (a chapter page): click a link in the right-hand list → *Pages with more links*
-- Level 3: click an article link → *Pages to download* → **Make PDF**
+- Step 1 (start page): click a link in the Flight Training tab. Alt-click another tab and say **Yes** if you want every tab. Then pick *Open them, they have more links to pick*.
+- Step 2 (a chapter page): click a link in the list on the right (same tab trick if it has tabs). Then pick *Open them…*
+- Step 3: click an article link, pick *Put them in the PDF*, then press **Make my PDF**.
 
 ## Automatic mode
 

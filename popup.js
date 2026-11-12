@@ -49,15 +49,17 @@ async function preview() {
 
 async function showSaved() {
   const { pick } = await chrome.storage.local.get("pick");
-  const has = pick && pick.levels && pick.levels.some(l => l.rules.length);
+  const groups = l => l.groups || [];
+  const pages = l => new Set(groups(l).flatMap(g => g.items.map(i => i.url))).size;
+  const has = pick && pick.levels && pick.levels.some(l => groups(l).length);
   $("saved").hidden = !has;
   if (!has) return;
   const roles = { download: "download", follow: "more links", both: "download + more links" };
   const used = [];
-  for (const l of pick.levels) { used.push(l); if (l.role === "download") break; }
+  for (const l of pick.levels) { if (!groups(l).length) break; used.push(l); if (l.role === "download") break; }
   $("savedText").textContent =
     `Saved picks for ${pick.startUrl.replace(/^https?:\/\/(www\.)?/, "")}: ` +
-    used.map((l, i) => `level ${i + 1} (${l.rules.length} selection${l.rules.length === 1 ? "" : "s"}, ${roles[l.role]})`).join(" → ");
+    used.map((l, i) => i === 0 ? `step 1: ${pages(l)} pages (${roles[l.role]})` : `step ${i + 1}: ${roles[l.role]}`).join(" → ");
 }
 
 async function startPicking(resume) {

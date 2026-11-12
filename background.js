@@ -30,14 +30,21 @@ chrome.tabs.onRemoved.addListener(async tabId => {
 });
 
 // Turn the saved picks into a job the runner understands.
+// Step 1 uses the exact pages you picked. Later steps use where you clicked (the same
+// spot on every page), and click through the page's tabs if you said yes to "every tab".
 function recipeFrom(pick) {
   const levels = [];
   for (const L of pick.levels) {
+    const groups = L.groups || [];
+    if (!groups.length) break;
+    const seen = new Set(), urls = [];
+    for (const g of groups) for (const it of g.items) if (!seen.has(it.url)) { seen.add(it.url); urls.push(it.url); }
     levels.push({
-      selectors: L.rules.map(r => r.candidates[r.idx].sel),
+      groups: groups.map(g => ({ sel: g.candidates[g.idx].sel, tabSel: g.tabSel || null })),
+      urls,
       role: L.role
     });
-    if (L.role === "download") break; // nothing after a download-only level is used
+    if (L.role === "download") break; // nothing after a download-only step is used
   }
   return { levels };
 }
@@ -49,12 +56,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       const pick = msg.resume && old
         ? { ...old, active: true, tabId: msg.tabId }
         : { active: true, tabId: msg.tabId, startUrl: msg.url, current: 0, sampleIdx: 0,
-            levels: [{ rules: [], role: "download", urls: [] }] };
+            levels: [{ groups: [], role: "download" }] };
       await chrome.storage.local.set({ pick });
       if (msg.resume && old && old.current > 0) {
         // Go back to the page that level was picked on.
         const L = old.levels[old.current];
-        const url = L.pickedOn || (old.levels[old.current - 1].urls || [])[0] || old.startUrl;
+        const prev = (old.levels[old.current - 1].groups || []).flatMap(g => g.items);
+        const url = L.pickedOn || (prev[0] && prev[0].url) || old.startUrl;
         await chrome.tabs.update(msg.tabId, { url });
       } else if (msg.resume && old && normalizeUrl(msg.url) !== normalizeUrl(old.startUrl)) {
         await chrome.tabs.update(msg.tabId, { url: old.startUrl });
