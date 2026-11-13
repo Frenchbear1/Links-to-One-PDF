@@ -53,6 +53,52 @@ function updateRow(node, icon, meta) {
 // ---------- helpers ----------
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Runs in every background page before the site's own code. Background tabs never draw frames,
+// so sites that wait for a frame (requestAnimationFrame) or for content to scroll into view
+// (IntersectionObserver) never fill in their content, e.g. Obsidian Publish sites print blank.
+// This makes both fire right away, as if the page were on screen and everything were visible.
+const PAGE_SHIM = `(() => {
+  if (window.__ltpShim) return; window.__ltpShim = true;
+  let q = [], idn = 0, scheduled = false, flushes = 0;
+  const ch = new MessageChannel();
+  const flush = () => {
+    scheduled = false; flushes++;
+    const now = performance.now(), run = q; q = [];
+    for (const [, cb] of run) { try { cb(now); } catch (e) { setTimeout(() => { throw e; }); } }
+  };
+  ch.port1.onmessage = flush;
+  window.requestAnimationFrame = cb => {
+    const n = ++idn; q.push([n, cb]);
+    if (!scheduled) { scheduled = true; if (flushes < 3000) ch.port2.postMessage(0); else setTimeout(flush, 50); }
+    return n;
+  };
+  window.cancelAnimationFrame = n => { q = q.filter(x => x[0] !== n); };
+  window.IntersectionObserver = class {
+    constructor(cb) { this.cb = cb; this.els = new Set(); }
+    observe(el) {
+      this.els.add(el);
+      setTimeout(() => {
+        if (!this.els.has(el)) return;
+        const r = el.getBoundingClientRect();
+        try { this.cb([{ target: el, isIntersecting: true, intersectionRatio: 1, boundingClientRect: r, intersectionRect: r, rootBounds: null, time: performance.now() }], this); } catch (e) {}
+      }, 0);
+    }
+    unobserve(el) { this.els.delete(el); }
+    disconnect() { this.els.clear(); }
+    takeRecords() { return []; }
+  };
+})();`;
+
+// Wait until the tab has left about:blank and finished loading the real page.
+async function waitForPageLoad(tabId) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < LOAD_TIMEOUT) {
+    const t = await chrome.tabs.get(tabId);
+    if (t.url && !t.url.startsWith("about:") && t.status === "complete") return;
+    await sleep(250);
+  }
+}
+
 function waitForTabLoad(tabId) {
   return new Promise(resolve => {
     let finished = false;
@@ -110,6 +156,24 @@ async function probePage(waitMs, selectors) {
       }
     }
   }
+  // Sites that squeeze the article into a one-screen scrolling box would print only the first
+  // screen. Find the clipped box holding the most text and let it (and its parents) grow.
+  try {
+    const set = (el, k, v) => el.style.setProperty(k, v, "important");
+    let main = null, best = 200;
+    for (const e of document.querySelectorAll("body *")) {
+      if (e.clientHeight < 100 || e.scrollHeight <= e.clientHeight + 20) continue;
+      if (!/(auto|scroll|hidden|clip)/.test(getComputedStyle(e).overflowY)) continue;
+      const n = (e.innerText || "").length;
+      if (n > best) { best = n; main = e; }
+    }
+    if (main) {
+      for (let e = main; e; e = e.parentElement) {
+        set(e, "height", "auto"); set(e, "max-height", "none");
+        set(e, "overflow", "visible"); set(e, "overflow-y", "visible");
+      }
+    }
+  } catch {}
   return { title: document.title || location.href, links };
 }
 
@@ -177,10 +241,10 @@ async function withoutPages(doc, bad) {
   return out.save();
 }
 
+// Prints the tab to PDF. The debugger must already be attached (processNode does that).
 async function printTab(tabId) {
   const target = { tabId };
-  await chrome.debugger.attach(target, "1.3");
-  try {
+  {
     const [w, h] = PAPER[settings.paper] || PAPER.letter;
     const footer = settings.footer;
     const res = await chrome.debugger.sendCommand(target, "Page.printToPDF", {
@@ -199,8 +263,6 @@ async function printTab(tabId) {
         '<span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>'
     });
     return b64ToBytes(res.data);
-  } finally {
-    await chrome.debugger.detach(target).catch(() => {});
   }
 }
 
@@ -267,11 +329,18 @@ async function processNode(node) {
     return;
   }
 
-  let tab;
+  let tab, attached = false;
   try {
-    tab = await openWorkerTab(node.url);
+    // Open a blank tab, install PAGE_SHIM, then load the real page so the shim runs first.
+    tab = await openWorkerTab("about:blank");
     openTabs.add(tab.id);
     await waitForTabLoad(tab.id);
+    await chrome.debugger.attach({ tabId: tab.id }, "1.3");
+    attached = true;
+    await chrome.debugger.sendCommand({ tabId: tab.id }, "Page.enable");
+    await chrome.debugger.sendCommand({ tabId: tab.id }, "Page.addScriptToEvaluateOnNewDocument", { source: PAGE_SHIM });
+    await chrome.debugger.sendCommand({ tabId: tab.id }, "Page.navigate", { url: node.url });
+    await waitForPageLoad(tab.id);
     if (cancelled) return;
 
     const [{ result }] = await chrome.scripting.executeScript({
@@ -297,6 +366,7 @@ async function processNode(node) {
     node.status = "failed"; failCount++;
     updateRow(node, "⚠️", "failed: " + (e.message || e));
   } finally {
+    if (attached) await chrome.debugger.detach({ tabId: tab.id }).catch(() => {});
     if (tab) {
       openTabs.delete(tab.id);
       chrome.tabs.remove(tab.id).catch(() => {});
