@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
   includeStart: true,
   footer: true,
   paper: "letter",     // "letter" | "a4"
+  look: "auto",        // "auto" | "print" (site's printer version) | "screen" (as it looks on screen)
   order: "reading",    // "reading" (each page followed by the pages it links to) | "level"
   linkedPdfs: true     // links that point straight at .pdf files are fetched and merged as-is
 };

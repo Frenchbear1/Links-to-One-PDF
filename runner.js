@@ -241,10 +241,29 @@ async function withoutPages(doc, bad) {
   return out.save();
 }
 
+// Some sites' print styles hide the whole page (Obsidian Publish hides everything but a box only
+// its desktop app creates), so the printout comes out blank. In "auto" we compare how much text
+// shows in print mode vs on screen, and print it as it looks on screen when print mode hides most of it.
+async function pickMedia(target) {
+  const look = settings.look || "auto";
+  if (look !== "auto") return look === "screen" ? "screen" : "print";
+  const textLen = async media => {
+    await chrome.debugger.sendCommand(target, "Emulation.setEmulatedMedia", { media });
+    const r = await chrome.debugger.sendCommand(target, "Runtime.evaluate",
+      { expression: "(document.body && document.body.innerText || '').trim().length", returnByValue: true });
+    return (r && r.result && r.result.value) || 0;
+  };
+  const onPrint = await textLen("print");
+  const onScreen = await textLen("screen");
+  return onScreen > 100 && onPrint < onScreen * 0.3 ? "screen" : "print";
+}
+
 // Prints the tab to PDF. The debugger must already be attached (processNode does that).
 async function printTab(tabId) {
   const target = { tabId };
   {
+    const media = await pickMedia(target);
+    await chrome.debugger.sendCommand(target, "Emulation.setEmulatedMedia", { media: media === "screen" ? "screen" : "" });
     const [w, h] = PAPER[settings.paper] || PAPER.letter;
     const footer = settings.footer;
     const res = await chrome.debugger.sendCommand(target, "Page.printToPDF", {

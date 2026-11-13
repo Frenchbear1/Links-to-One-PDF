@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const FIELDS = ["depth", "scope", "include", "exclude", "maxPages", "parallel", "waitMs", "paper", "order"];
+const FIELDS = ["depth", "scope", "include", "exclude", "maxPages", "parallel", "waitMs", "paper", "look", "order"];
 const CHECKS = ["includeStart", "footer", "linkedPdfs"];
 let activeTab = null;
 
